@@ -105,13 +105,8 @@ export function useComposioToolkits() {
  * Hook to initiate a new connection
  */
 export function useInitiateConnection() {
-    const queryClient = useQueryClient();
-
     return useMutation({
         mutationFn: initiateConnection,
-        onSuccess: () => {
-            // Will be refreshed after callback
-        },
     });
 }
 

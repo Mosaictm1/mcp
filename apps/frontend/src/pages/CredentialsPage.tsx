@@ -46,7 +46,7 @@ export default function CredentialsPage() {
 
     // Composio hooks
     const { data: composioStatus } = useComposioStatus();
-    const { data: composioConnectionsData, isLoading: loadingComposio, refetch: refetchComposio } = useComposioConnections();
+    const { data: composioConnectionsData, isLoading: _loadingComposio, refetch: refetchComposio } = useComposioConnections();
     const initiateConnection = useInitiateConnection();
     const verifyConnection = useVerifyConnection();
     const deleteComposioConnection = useDeleteConnection();
