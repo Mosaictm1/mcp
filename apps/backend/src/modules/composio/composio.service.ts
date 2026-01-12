@@ -148,42 +148,50 @@ export class ComposioService implements OnModuleInit {
         }
 
         try {
-            // Use Composio v3 API format
+            // Use Composio connection initiation API
             const axios = (await import('axios')).default;
 
+            // Try the connection initiation endpoint
             const response = await axios.post(
-                'https://backend.composio.dev/api/v3/connectedAccounts',
+                'https://backend.composio.dev/api/v1/connectedAccounts/initiateConnection',
                 {
-                    integrationId: authConfigId,
+                    authConfig: authConfigId,
                     entityId: userId,
-                    redirectUri: finalCallbackUrl,
-                    data: {},
+                    redirectUrl: finalCallbackUrl,
                 },
                 {
                     headers: {
-                        'X-API-Key': apiKey,
+                        'x-api-key': apiKey,
                         'Content-Type': 'application/json',
                     },
                 }
             );
 
+            this.logger.log(`API response status: ${response.status}`);
             this.logger.log(`API response: ${JSON.stringify(response.data)}`);
 
             const data = response.data;
             const redirectUrl = data?.redirectUrl ||
                 data?.connectionStatus?.redirectUrl ||
+                data?.url ||
                 '';
             const connectionId = data?.connectedAccountId ||
                 data?.id ||
                 `conn_${Date.now()}`;
+
+            if (!redirectUrl) {
+                this.logger.warn('No redirect URL in response, full data: ' + JSON.stringify(data));
+            }
 
             return {
                 redirectUrl,
                 connectionRequestId: connectionId,
             };
         } catch (error: any) {
-            this.logger.error(`API error: ${JSON.stringify(error.response?.data) || error.message}`);
-            throw new Error(`Composio connection failed: ${error.response?.data?.error || error.message}`);
+            this.logger.error(`API error status: ${error.response?.status}`);
+            this.logger.error(`API error data: ${JSON.stringify(error.response?.data)}`);
+            this.logger.error(`API error message: ${error.message}`);
+            throw new Error(`Composio connection failed: ${error.response?.data?.error || error.response?.data?.message || error.message}`);
         }
     }
 
