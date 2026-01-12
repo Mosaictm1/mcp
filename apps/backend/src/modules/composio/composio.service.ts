@@ -55,9 +55,10 @@ export class ComposioService implements OnModuleInit {
         const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
         // Build Composio Connect URL directly (hosted auth page)
+        // Don't pass redirectUrl to avoid redirect_uri_mismatch - Composio handles it
         const connectUrl = new URL(`https://connect.composio.dev/${authConfigId}`);
         connectUrl.searchParams.set('entityId', userId);
-        connectUrl.searchParams.set('redirectUrl', finalCallbackUrl);
+        // Note: Composio will redirect to your app after success via their default flow
 
         const redirectUrl = connectUrl.toString();
         this.logger.log(`Generated connect URL: ${redirectUrl}`);
