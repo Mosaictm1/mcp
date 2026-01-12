@@ -28,7 +28,7 @@ interface Connection {
 // Predefined auth configs from Composio Dashboard
 // Add your Auth Config IDs from https://platform.composio.dev/auth-configs
 const COMPOSIO_AUTH_CONFIGS = [
-    { id: 'gmail', name: 'Gmail', icon: '📧', authConfigId: 'ac_mQ3aH0pTXYay' },
+    { id: 'gmail', name: 'Gmail', icon: '📧', authConfigId: 'ac_2Va6CbiLUfta' },
     { id: 'slack', name: 'Slack', icon: '💬', authConfigId: '' },
     { id: 'notion', name: 'Notion', icon: '📝', authConfigId: '' },
     { id: 'google_drive', name: 'Google Drive', icon: '📁', authConfigId: '' },
