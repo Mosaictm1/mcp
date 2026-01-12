@@ -123,8 +123,7 @@ export class ComposioService implements OnModuleInit {
     }
 
     /**
-     * Initiate a connection using Composio REST API directly
-     * (SDK has validation issues, so using direct API call)
+     * Initiate a connection using Composio REST API v3
      */
     async initiateConnection(
         userId: string,
@@ -149,15 +148,16 @@ export class ComposioService implements OnModuleInit {
         }
 
         try {
-            // Use direct REST API call to Composio
+            // Use Composio v3 API format
             const axios = (await import('axios')).default;
 
             const response = await axios.post(
-                'https://backend.composio.dev/api/v1/connectedAccounts',
+                'https://backend.composio.dev/api/v3/connectedAccounts',
                 {
-                    authConfigId: authConfigId,
+                    integrationId: authConfigId,
                     entityId: userId,
                     redirectUri: finalCallbackUrl,
+                    data: {},
                 },
                 {
                     headers: {
@@ -182,9 +182,8 @@ export class ComposioService implements OnModuleInit {
                 connectionRequestId: connectionId,
             };
         } catch (error: any) {
-            this.logger.error(`API error: ${error.response?.data || error.message}`);
-            this.logger.error(`Full error: ${JSON.stringify(error.response?.data || error.message)}`);
-            throw new Error(`Composio connection failed: ${error.response?.data?.message || error.message}`);
+            this.logger.error(`API error: ${JSON.stringify(error.response?.data) || error.message}`);
+            throw new Error(`Composio connection failed: ${error.response?.data?.error || error.message}`);
         }
     }
 
