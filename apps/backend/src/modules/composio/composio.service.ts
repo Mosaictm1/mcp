@@ -141,23 +141,26 @@ export class ComposioService implements OnModuleInit {
         this.logger.log(`Initiating connection for user ${userId}`);
         this.logger.log(`Auth Config: ${authConfigId}, Toolkit: ${toolkitName}, AllowMultiple: ${allowMultiple}`);
 
+        if (!authConfigId) {
+            throw new Error('authConfigId is required');
+        }
+
         try {
-            // Use SDK's connectedAccounts.initiate
-            const connectionRequest = await (composio as any).connectedAccounts.initiate({
-                auth_config_id: authConfigId,
-                user_id: userId,
-                redirect_uri: finalCallbackUrl,
-                allow_multiple: allowMultiple,
-            });
+            // Use SDK's connectedAccounts.initiate with correct parameter names
+            const connectionRequest = await composio.connectedAccounts.initiate({
+                authConfigId: authConfigId,
+                entityId: userId,
+                redirectUri: finalCallbackUrl,
+            } as any);
 
             this.logger.log(`SDK response: ${JSON.stringify(connectionRequest)}`);
 
             const redirectUrl = connectionRequest?.redirectUrl ||
-                connectionRequest?.connectionStatus?.redirectUrl ||
-                connectionRequest?.redirect_url ||
+                (connectionRequest as any)?.connectionStatus?.redirectUrl ||
+                (connectionRequest as any)?.redirect_url ||
                 '';
             const connectionId = connectionRequest?.connectedAccountId ||
-                connectionRequest?.id ||
+                (connectionRequest as any)?.id ||
                 `conn_${Date.now()}`;
 
             return {
