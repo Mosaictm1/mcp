@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send, Loader2, Sparkles, CheckCircle, XCircle } from 'lucide-react';
+import { Send, Loader2, Sparkles } from 'lucide-react';
 import { useChatStore } from '@/stores/chatStore';
 import { callMcpTool } from '@/lib/api';
 import { motion, AnimatePresence } from 'framer-motion';
