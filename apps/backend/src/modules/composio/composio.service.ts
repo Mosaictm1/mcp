@@ -49,11 +49,11 @@ export class ComposioService implements OnModuleInit {
 
         try {
             // Use SDK's connectedAccounts.initiate - this generates proper links
-            // Note: Composio SDK renamed integrationId to authConfigId and entityId to userId
+            // Note: Composio SDK uses snake_case for parameters
             const connectionRequest = await (composio as any).connectedAccounts.initiate({
-                authConfigId: authConfigId,
-                userId: userId,
-                redirectUri: finalCallbackUrl,
+                auth_config_id: authConfigId,
+                user_id: userId,
+                redirect_uri: finalCallbackUrl,
             });
 
             this.logger.log(`SDK response: ${JSON.stringify(connectionRequest)}`);
