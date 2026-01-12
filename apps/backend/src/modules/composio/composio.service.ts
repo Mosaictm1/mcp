@@ -37,13 +37,18 @@ export class ComposioService implements OnModuleInit {
         userId: string,
         authConfigId: string,
         callbackUrl?: string,
+        toolkitName?: string,
     ): Promise<{ redirectUrl: string; connectionRequestId: string }> {
         const composio = this.ensureInitialized();
 
         const frontendUrl = this.config.get('FRONTEND_URL', 'https://n8n-autopilot.vercel.app');
         const finalCallbackUrl = callbackUrl || `${frontendUrl}/credentials?composio_callback=true`;
 
-        this.logger.log(`Initiating connection for user ${userId} with auth config ${authConfigId}`);
+        // Extract app name from toolkitName or use a default
+        const appName = toolkitName?.toUpperCase() || 'GMAIL';
+
+        this.logger.log(`Initiating connection for user ${userId}`);
+        this.logger.log(`Auth Config: ${authConfigId}, App: ${appName}`);
         this.logger.log(`Callback URL: ${finalCallbackUrl}`);
 
         try {
@@ -51,9 +56,10 @@ export class ComposioService implements OnModuleInit {
             const entity = await composio.getEntity(userId);
 
             const connectionRequest = await entity.initiateConnection({
-                appName: authConfigId,
+                appName: appName,
+                authConfig: { id: authConfigId },
                 redirectUri: finalCallbackUrl,
-            });
+            } as any);
 
             this.logger.log(`Connection initiated: ${JSON.stringify(connectionRequest)}`);
 

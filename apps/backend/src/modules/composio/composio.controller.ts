@@ -57,6 +57,7 @@ export class ComposioController {
                 userId,
                 dto.authConfigId,
                 dto.callbackUrl,
+                dto.toolkitName,
             );
 
             // Save pending connection to local DB only if we have valid IDs
