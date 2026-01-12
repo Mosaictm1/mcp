@@ -38,10 +38,7 @@ export class ComposioService implements OnModuleInit {
         authConfigId: string,
         callbackUrl?: string,
     ): Promise<{ redirectUrl: string; connectionRequestId: string }> {
-        const apiKey = this.config.get<string>('COMPOSIO_API_KEY');
-        if (!apiKey) {
-            throw new Error('COMPOSIO_API_KEY not configured');
-        }
+        const composio = this.ensureInitialized();
 
         const frontendUrl = this.config.get('FRONTEND_URL', 'https://n8n-autopilot.vercel.app');
         const finalCallbackUrl = callbackUrl || `${frontendUrl}/credentials?composio_callback=true`;
@@ -50,35 +47,24 @@ export class ComposioService implements OnModuleInit {
         this.logger.log(`Callback URL: ${finalCallbackUrl}`);
 
         try {
-            // Use REST API directly
-            const axios = require('axios');
-            const response = await axios.post(
-                'https://backend.composio.dev/api/v2/connectedAccounts',
-                {
-                    integrationId: authConfigId,
-                    entityId: userId,
-                    redirectUri: finalCallbackUrl,
-                },
-                {
-                    headers: {
-                        'X-API-Key': apiKey,
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
+            // Get entity for the user and initiate connection
+            const entity = await composio.getEntity(userId);
 
-            const data = response.data;
-            this.logger.log(`Composio response: ${JSON.stringify(data)}`);
+            const connectionRequest = await entity.initiateConnection({
+                appName: authConfigId,
+                redirectUri: finalCallbackUrl,
+            });
+
+            this.logger.log(`Connection initiated: ${JSON.stringify(connectionRequest)}`);
 
             return {
-                redirectUrl: data.redirectUrl || data.connectionStatus?.redirectUrl || '',
-                connectionRequestId: data.connectedAccountId || data.id || '',
+                redirectUrl: (connectionRequest as any).redirectUrl || (connectionRequest as any).connectionStatus?.redirectUrl || '',
+                connectionRequestId: (connectionRequest as any).connectedAccountId || (connectionRequest as any).id || '',
             };
         } catch (error: any) {
-            const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
-            const errorDetails = JSON.stringify(error.response?.data || {});
-            this.logger.error(`Composio API error: ${errorMessage}`);
-            this.logger.error(`Error details: ${errorDetails}`);
+            const errorMessage = error.message || 'Unknown error';
+            this.logger.error(`Composio SDK error: ${errorMessage}`);
+            this.logger.error(`Full error: ${JSON.stringify(error)}`);
             throw new Error(`Composio connection failed: ${errorMessage}`);
         }
     }
