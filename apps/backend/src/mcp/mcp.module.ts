@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { McpService } from './mcp.service';
 import { McpController } from './mcp.controller';
 import { PicaController } from './pica.controller';
+import { AuthKitController } from './authkit.controller';
 import { AiModule } from '../ai/ai.module';
 import { ExecutionsModule } from '../modules/executions/executions.module';
 import { CredentialsModule } from '../modules/credentials/credentials.module';
@@ -22,7 +23,7 @@ import { ListCredentialsTool } from './tools/list-credentials.tool';
         CredentialsModule,
         AuthModule,
     ],
-    controllers: [McpController, PicaController],
+    controllers: [McpController, PicaController, AuthKitController],
     providers: [
         McpService,
         PicaService,
