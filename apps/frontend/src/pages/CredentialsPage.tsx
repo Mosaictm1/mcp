@@ -29,7 +29,7 @@ interface Connection {
 // Add your Auth Config IDs from https://platform.composio.dev/auth-configs
 const COMPOSIO_AUTH_CONFIGS = [
     { id: 'gmail', name: 'Gmail', icon: '📧', authConfigId: 'ac_2Va6CbiLUfta' },
-    { id: 'google_sheets', name: 'Google Sheets', icon: '📊', authConfigId: 'ac_sfyMmR0nmVP_' },
+    { id: 'google_sheets', name: 'Google Sheets', icon: '📊', authConfigId: 'ac_sfyMmlt0nmVP_' },
     { id: 'facebook', name: 'Facebook', icon: '📘', authConfigId: 'ac_V6JayJEWhftP' },
     { id: 'slack', name: 'Slack', icon: '💬', authConfigId: '' },
     { id: 'notion', name: 'Notion', icon: '📝', authConfigId: '' },
