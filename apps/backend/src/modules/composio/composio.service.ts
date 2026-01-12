@@ -1,12 +1,30 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { Composio } from 'composio-core';
+import { Composio } from '@composio/core';
+import { VercelProvider } from '@composio/vercel';
+
+// Session info for Tool Router
+export interface ToolRouterSession {
+    sessionId: string;
+    userId: string;
+    mcpUrl: string;
+    mcpHeaders: Record<string, string>;
+    toolkits?: string[];
+}
+
+// Authorization result
+export interface AuthorizationResult {
+    redirectUrl: string;
+    connectionId: string;
+    toolkit: string;
+}
 
 @Injectable()
 export class ComposioService implements OnModuleInit {
     private readonly logger = new Logger(ComposioService.name);
-    private composio: Composio | null = null;
+    // Use any type to allow different provider configurations
+    private composio: any = null;
 
     constructor(
         private config: ConfigService,
@@ -16,14 +34,18 @@ export class ComposioService implements OnModuleInit {
     onModuleInit() {
         const apiKey = this.config.get<string>('COMPOSIO_API_KEY');
         if (apiKey) {
-            this.composio = new Composio({ apiKey });
-            this.logger.log('✅ Composio SDK initialized');
+            // Initialize with Vercel AI SDK provider
+            this.composio = new Composio({
+                apiKey,
+                provider: new VercelProvider(),
+            });
+            this.logger.log('✅ Composio SDK initialized with Vercel AI SDK provider');
         } else {
             this.logger.warn('⚠️ COMPOSIO_API_KEY not configured - Composio features disabled');
         }
     }
 
-    private ensureInitialized(): Composio {
+    private ensureInitialized(): any {
         if (!this.composio) {
             throw new Error('Composio is not configured. Please set COMPOSIO_API_KEY in .env');
         }
@@ -31,13 +53,85 @@ export class ComposioService implements OnModuleInit {
     }
 
     /**
+     * Create a Tool Router session for a user
+     * Sessions are ephemeral, user-scoped, and manage connections and tools
+     */
+    async createSession(userId: string, toolkits?: string[]): Promise<ToolRouterSession> {
+        const composio = this.ensureInitialized();
+
+        this.logger.log(`Creating Tool Router session for user ${userId}`);
+
+        try {
+            const session = await (composio as any).create(userId, {
+                toolkits,
+            });
+
+            return {
+                sessionId: session.id || `session_${Date.now()}`,
+                userId,
+                mcpUrl: session.mcp?.url || '',
+                mcpHeaders: session.mcp?.headers || {},
+                toolkits,
+            };
+        } catch (error: any) {
+            this.logger.error(`Failed to create session: ${error.message}`);
+            throw new Error(`Failed to create Tool Router session: ${error.message}`);
+        }
+    }
+
+    /**
+     * Get tools for a user session (for Vercel AI SDK binding)
+     * These tools can be directly passed to generateText/streamText
+     */
+    async getSessionTools(userId: string, toolkits?: string[]): Promise<any> {
+        const composio = this.ensureInitialized();
+
+        this.logger.log(`Getting tools for user ${userId}, toolkits: ${toolkits?.join(', ') || 'all'}`);
+
+        try {
+            const session = await (composio as any).create(userId, { toolkits });
+            const tools = await session.tools();
+            return tools;
+        } catch (error: any) {
+            this.logger.error(`Failed to get session tools: ${error.message}`);
+            throw new Error(`Failed to get session tools: ${error.message}`);
+        }
+    }
+
+    /**
+     * Authorize a specific toolkit for a user (manual auth flow)
+     * Returns a redirect URL for the user to complete OAuth
+     */
+    async authorizeToolkit(userId: string, toolkit: string): Promise<AuthorizationResult> {
+        const composio = this.ensureInitialized();
+
+        this.logger.log(`Authorizing ${toolkit} for user ${userId}`);
+
+        try {
+            const session = await (composio as any).create(userId);
+            const connectionRequest = await session.authorize(toolkit);
+
+            return {
+                redirectUrl: connectionRequest.redirect_url || connectionRequest.redirectUrl || '',
+                connectionId: connectionRequest.id || connectionRequest.connectionId || '',
+                toolkit,
+            };
+        } catch (error: any) {
+            this.logger.error(`Failed to authorize toolkit: ${error.message}`);
+            throw new Error(`Failed to authorize ${toolkit}: ${error.message}`);
+        }
+    }
+
+    /**
      * Initiate a connection using Composio SDK
+     * Supports multiple account connections with allow_multiple flag
      */
     async initiateConnection(
         userId: string,
         authConfigId: string,
         callbackUrl?: string,
         toolkitName?: string,
+        allowMultiple = false,
     ): Promise<{ redirectUrl: string; connectionRequestId: string }> {
         const composio = this.ensureInitialized();
 
@@ -45,21 +139,22 @@ export class ComposioService implements OnModuleInit {
         const finalCallbackUrl = callbackUrl || `${frontendUrl}/credentials?composio_callback=true`;
 
         this.logger.log(`Initiating connection for user ${userId}`);
-        this.logger.log(`Auth Config: ${authConfigId}, Toolkit: ${toolkitName}`);
+        this.logger.log(`Auth Config: ${authConfigId}, Toolkit: ${toolkitName}, AllowMultiple: ${allowMultiple}`);
 
         try {
-            // Use SDK's connectedAccounts.initiate - this generates proper links
-            // Note: Composio SDK uses snake_case for parameters
+            // Use SDK's connectedAccounts.initiate
             const connectionRequest = await (composio as any).connectedAccounts.initiate({
                 auth_config_id: authConfigId,
                 user_id: userId,
                 redirect_uri: finalCallbackUrl,
+                allow_multiple: allowMultiple,
             });
 
             this.logger.log(`SDK response: ${JSON.stringify(connectionRequest)}`);
 
             const redirectUrl = connectionRequest?.redirectUrl ||
                 connectionRequest?.connectionStatus?.redirectUrl ||
+                connectionRequest?.redirect_url ||
                 '';
             const connectionId = connectionRequest?.connectedAccountId ||
                 connectionRequest?.id ||
@@ -161,10 +256,37 @@ export class ComposioService implements OnModuleInit {
         const composio = this.ensureInitialized();
 
         try {
-            const result = await composio.integrations.list({} as any);
-            return (result as any).items || [];
+            // Try new SDK method first
+            const result = await (composio as any).toolkits?.get?.() ||
+                await composio.integrations.list({} as any);
+            return (result as any).items || result || [];
         } catch (error: any) {
             this.logger.error(`Failed to get toolkits: ${error.message}`);
+            return [];
+        }
+    }
+
+    /**
+     * Get tools for a specific toolkit with filtering
+     * Uses dynamic tool retrieval to minimize prompt token bloat
+     */
+    async getTools(options: {
+        toolkits?: string[];
+        limit?: number;
+        search?: string;
+    } = {}): Promise<any[]> {
+        const composio = this.ensureInitialized();
+
+        try {
+            const result = await (composio as any).tools?.get?.(options) ||
+                await composio.actions.list({
+                    apps: options.toolkits?.join(','),
+                    limit: options.limit,
+                } as any);
+
+            return (result as any).items || result || [];
+        } catch (error: any) {
+            this.logger.error(`Failed to get tools: ${error.message}`);
             return [];
         }
     }

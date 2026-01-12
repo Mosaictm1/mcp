@@ -2,47 +2,54 @@ import { IsString, IsOptional, IsObject } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class InitiateConnectionDto {
-    @ApiProperty({ 
+    @ApiProperty({
         description: 'Auth Config ID from Composio Dashboard',
-        example: 'ac_1234567890' 
+        example: 'ac_1234567890'
     })
     @IsString()
     authConfigId: string;
 
-    @ApiPropertyOptional({ 
+    @ApiPropertyOptional({
         description: 'Callback URL after authentication',
-        example: 'https://your-app.com/callback' 
+        example: 'https://your-app.com/callback'
     })
     @IsOptional()
     @IsString()
     callbackUrl?: string;
 
-    @ApiPropertyOptional({ 
+    @ApiPropertyOptional({
         description: 'Toolkit name for display purposes',
-        example: 'gmail' 
+        example: 'gmail'
     })
     @IsOptional()
     @IsString()
     toolkitName?: string;
+
+    @ApiPropertyOptional({
+        description: 'Allow multiple accounts for this toolkit',
+        example: false
+    })
+    @IsOptional()
+    allowMultiple?: boolean;
 }
 
 export class ExecuteActionDto {
-    @ApiProperty({ 
+    @ApiProperty({
         description: 'Connected account ID',
-        example: 'ca_1234567890' 
+        example: 'ca_1234567890'
     })
     @IsString()
     connectionId: string;
 
-    @ApiProperty({ 
+    @ApiProperty({
         description: 'Action to execute',
-        example: 'GMAIL_SEND_EMAIL' 
+        example: 'GMAIL_SEND_EMAIL'
     })
     @IsString()
     action: string;
 
-    @ApiPropertyOptional({ 
-        description: 'Parameters for the action' 
+    @ApiPropertyOptional({
+        description: 'Parameters for the action'
     })
     @IsOptional()
     @IsObject()

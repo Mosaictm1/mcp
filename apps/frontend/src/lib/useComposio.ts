@@ -22,6 +22,7 @@ export interface InitiateConnectionParams {
     authConfigId: string;
     callbackUrl?: string;
     toolkitName?: string;
+    allowMultiple?: boolean;
 }
 
 export interface InitiateConnectionResponse {
@@ -29,9 +30,32 @@ export interface InitiateConnectionResponse {
     connectionRequestId: string;
 }
 
+export interface ToolRouterSession {
+    sessionId: string;
+    userId: string;
+    mcpUrl: string;
+    mcpHeaders: Record<string, string>;
+    toolkits?: string[];
+}
+
+export interface AuthorizationResult {
+    redirectUrl: string;
+    connectionId: string;
+    toolkit: string;
+}
+
+export interface ComposioStatus {
+    configured: boolean;
+    message: string;
+    webhook?: {
+        configured: boolean;
+        message: string;
+    };
+}
+
 // ==================== API FUNCTIONS ====================
 
-async function getComposioStatus(): Promise<{ configured: boolean; message: string }> {
+async function getComposioStatus(): Promise<ComposioStatus> {
     const response = await api.get('/api/composio/status');
     return response.data;
 }
@@ -64,6 +88,21 @@ async function deleteConnection(connectionId: string): Promise<void> {
 
 async function getToolkits(): Promise<{ toolkits: ComposioToolkit[] }> {
     const response = await api.get('/api/composio/toolkits');
+    return response.data;
+}
+
+async function createSession(toolkits?: string[]): Promise<ToolRouterSession> {
+    const response = await api.post('/api/composio/session', { toolkits });
+    return response.data;
+}
+
+async function authorizeToolkit(toolkit: string): Promise<AuthorizationResult> {
+    const response = await api.post('/api/composio/authorize', { toolkit });
+    return response.data;
+}
+
+async function getSessionTools(toolkits?: string[]): Promise<{ tools: any }> {
+    const response = await api.post('/api/composio/tools', { toolkits });
     return response.data;
 }
 
@@ -139,6 +178,50 @@ export function useDeleteConnection() {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['composio-connections'] });
         },
+    });
+}
+
+/**
+ * Hook to create a Tool Router session
+ */
+export function useToolRouterSession(toolkits?: string[]) {
+    return useQuery({
+        queryKey: ['composio-session', toolkits],
+        queryFn: () => createSession(toolkits),
+        staleTime: 5 * 60 * 1000, // 5 minutes
+        enabled: false, // Only fetch when explicitly called
+    });
+}
+
+/**
+ * Mutation hook to create a Tool Router session on demand
+ */
+export function useCreateSession() {
+    return useMutation({
+        mutationFn: createSession,
+    });
+}
+
+/**
+ * Hook to authorize a specific toolkit
+ */
+export function useAuthorizeToolkit() {
+    const queryClient = useQueryClient();
+
+    return useMutation({
+        mutationFn: authorizeToolkit,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['composio-connections'] });
+        },
+    });
+}
+
+/**
+ * Hook to get tools for a session
+ */
+export function useSessionTools() {
+    return useMutation({
+        mutationFn: getSessionTools,
     });
 }
 

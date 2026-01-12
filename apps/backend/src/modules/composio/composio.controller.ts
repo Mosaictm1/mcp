@@ -11,32 +11,170 @@ import {
     HttpException,
     HttpStatus,
     Res,
+    Req,
+    Headers,
+    RawBodyRequest,
 } from '@nestjs/common';
-import { Response } from 'express';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
-import { ComposioService } from './composio.service';
+import { Response, Request as ExpressRequest } from 'express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery, ApiBody } from '@nestjs/swagger';
+import { ComposioService, ToolRouterSession, AuthorizationResult } from './composio.service';
+import { ComposioWebhookService, ComposioWebhookPayload } from './composio-webhook.service';
 import { InitiateConnectionDto, ExecuteActionDto } from './composio.dto';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
 import { ConfigService } from '@nestjs/config';
+
+// DTOs for new endpoints
+class CreateSessionDto {
+    toolkits?: string[];
+}
+
+class AuthorizeToolkitDto {
+    toolkit: string;
+}
+
+class GetToolsDto {
+    toolkits?: string[];
+    limit?: number;
+    search?: string;
+}
 
 @ApiTags('Composio')
 @Controller('composio')
 export class ComposioController {
     constructor(
         private composioService: ComposioService,
+        private webhookService: ComposioWebhookService,
         private config: ConfigService,
     ) { }
 
     @Get('status')
     @ApiOperation({ summary: 'Check if Composio is configured' })
     getStatus() {
+        const webhookStatus = this.webhookService.getStatus();
         return {
             configured: this.composioService.isConfigured(),
             message: this.composioService.isConfigured()
                 ? 'Composio is ready'
                 : 'COMPOSIO_API_KEY not configured',
+            webhook: webhookStatus,
         };
     }
+
+    // ==================== TOOL ROUTER ENDPOINTS ====================
+
+    @Post('session')
+    @UseGuards(SupabaseAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Create Tool Router session for the current user' })
+    @ApiBody({ type: CreateSessionDto })
+    async createSession(
+        @Request() req: any,
+        @Body() dto: CreateSessionDto,
+    ): Promise<ToolRouterSession> {
+        const userId = req.user?.id || req.user?.sub;
+
+        if (!userId) {
+            throw new HttpException('User ID not found', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const session = await this.composioService.createSession(userId, dto.toolkits);
+            return session;
+        } catch (error: any) {
+            throw new HttpException(
+                error.message || 'Failed to create session',
+                HttpStatus.BAD_REQUEST,
+            );
+        }
+    }
+
+    @Post('authorize')
+    @UseGuards(SupabaseAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Authorize a specific toolkit for the user' })
+    @ApiBody({ type: AuthorizeToolkitDto })
+    async authorizeToolkit(
+        @Request() req: any,
+        @Body() dto: AuthorizeToolkitDto,
+    ): Promise<AuthorizationResult> {
+        const userId = req.user?.id || req.user?.sub;
+
+        if (!userId) {
+            throw new HttpException('User ID not found', HttpStatus.UNAUTHORIZED);
+        }
+
+        if (!dto.toolkit) {
+            throw new HttpException('Toolkit name is required', HttpStatus.BAD_REQUEST);
+        }
+
+        try {
+            return await this.composioService.authorizeToolkit(userId, dto.toolkit);
+        } catch (error: any) {
+            throw new HttpException(
+                error.message || 'Failed to authorize toolkit',
+                HttpStatus.BAD_REQUEST,
+            );
+        }
+    }
+
+    @Post('tools')
+    @UseGuards(SupabaseAuthGuard)
+    @ApiBearerAuth()
+    @ApiOperation({ summary: 'Get tools for the user session' })
+    @ApiBody({ type: GetToolsDto })
+    async getSessionTools(
+        @Request() req: any,
+        @Body() dto: GetToolsDto,
+    ) {
+        const userId = req.user?.id || req.user?.sub;
+
+        if (!userId) {
+            throw new HttpException('User ID not found', HttpStatus.UNAUTHORIZED);
+        }
+
+        try {
+            const tools = await this.composioService.getSessionTools(userId, dto.toolkits);
+            return { tools };
+        } catch (error: any) {
+            throw new HttpException(
+                error.message || 'Failed to get tools',
+                HttpStatus.BAD_REQUEST,
+            );
+        }
+    }
+
+    // ==================== WEBHOOK ENDPOINT ====================
+
+    @Post('webhook')
+    @ApiOperation({ summary: 'Composio webhook endpoint for trigger events' })
+    async handleWebhook(
+        @Req() req: RawBodyRequest<ExpressRequest>,
+        @Headers('webhook-signature') signature: string,
+        @Headers('webhook-id') webhookId: string,
+        @Headers('webhook-timestamp') timestamp: string,
+        @Body() body: ComposioWebhookPayload,
+    ) {
+        // Get raw body for signature verification
+        const rawBody = req.rawBody?.toString() || JSON.stringify(body);
+
+        // Verify signature
+        if (!this.webhookService.verifySignature(signature, webhookId, timestamp, rawBody)) {
+            throw new HttpException('Invalid webhook signature', HttpStatus.UNAUTHORIZED);
+        }
+
+        // Process the webhook
+        try {
+            await this.webhookService.handleWebhook(body);
+            return { status: 'success', message: 'Webhook processed' };
+        } catch (error: any) {
+            throw new HttpException(
+                error.message || 'Failed to process webhook',
+                HttpStatus.INTERNAL_SERVER_ERROR,
+            );
+        }
+    }
+
+    // ==================== CONNECTION ENDPOINTS ====================
 
     @Post('connect')
     @UseGuards(SupabaseAuthGuard)
@@ -58,6 +196,7 @@ export class ComposioController {
                 dto.authConfigId,
                 dto.callbackUrl,
                 dto.toolkitName,
+                dto.allowMultiple || false,
             );
 
             // Save pending connection to local DB only if we have valid IDs
@@ -182,6 +321,8 @@ export class ComposioController {
         }
     }
 
+    // ==================== TOOLKIT ENDPOINTS ====================
+
     @Get('toolkits')
     @ApiOperation({ summary: 'Get available toolkits/integrations' })
     async getToolkits() {
@@ -210,6 +351,8 @@ export class ComposioController {
         }
     }
 
+    // ==================== ACTION EXECUTION ====================
+
     @Post('execute')
     @UseGuards(SupabaseAuthGuard)
     @ApiBearerAuth()
@@ -225,6 +368,22 @@ export class ComposioController {
             );
             return { result };
         } catch (error: any) {
+            // Handle auth_required state
+            if (error.message?.includes('auth_required') || error.code === 'AUTH_REQUIRED') {
+                throw new HttpException(
+                    { message: 'Re-authentication required', code: 'AUTH_REQUIRED' },
+                    HttpStatus.UNAUTHORIZED,
+                );
+            }
+
+            // Handle execution_failure state
+            if (error.message?.includes('execution_failure') || error.code === 'EXECUTION_FAILURE') {
+                throw new HttpException(
+                    { message: error.message || 'Action execution failed', code: 'EXECUTION_FAILURE' },
+                    HttpStatus.BAD_REQUEST,
+                );
+            }
+
             throw new HttpException(
                 error.message || 'Failed to execute action',
                 HttpStatus.BAD_REQUEST,
