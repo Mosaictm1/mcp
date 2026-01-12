@@ -29,7 +29,6 @@
         "@nestjs/passport": "^10.0.3",
         "@nestjs/platform-express": "^10.3.0",
         "@nestjs/swagger": "^7.2.0",
-        "@picahq/toolkit": "^1.0.2",
         "@prisma/client": "^5.8.0",
         "@supabase/supabase-js": "^2.39.0",
         "axios": "^1.13.2",
