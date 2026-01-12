@@ -31,7 +31,7 @@ export class ComposioService implements OnModuleInit {
     }
 
     /**
-     * Initiate a connection using Composio's hosted Connect page
+     * Initiate a connection using Composio SDK
      */
     async initiateConnection(
         userId: string,
@@ -39,34 +39,40 @@ export class ComposioService implements OnModuleInit {
         callbackUrl?: string,
         toolkitName?: string,
     ): Promise<{ redirectUrl: string; connectionRequestId: string }> {
-        const apiKey = this.config.get<string>('COMPOSIO_API_KEY');
-        if (!apiKey) {
-            throw new Error('COMPOSIO_API_KEY not configured');
-        }
+        const composio = this.ensureInitialized();
 
         const frontendUrl = this.config.get('FRONTEND_URL', 'https://n8n-autopilot.vercel.app');
         const finalCallbackUrl = callbackUrl || `${frontendUrl}/credentials?composio_callback=true`;
 
         this.logger.log(`Initiating connection for user ${userId}`);
         this.logger.log(`Auth Config: ${authConfigId}, Toolkit: ${toolkitName}`);
-        this.logger.log(`Callback URL: ${finalCallbackUrl}`);
 
-        // Generate unique connection ID
-        const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        try {
+            // Use SDK's connectedAccounts.initiate - this generates proper links
+            const connectionRequest = await (composio as any).connectedAccounts.initiate({
+                integrationId: authConfigId,
+                entityId: userId,
+                redirectUri: finalCallbackUrl,
+            });
 
-        // Build Composio Connect URL directly (hosted auth page)
-        // Don't pass redirectUrl to avoid redirect_uri_mismatch - Composio handles it
-        const connectUrl = new URL(`https://connect.composio.dev/${authConfigId}`);
-        connectUrl.searchParams.set('entityId', userId);
-        // Note: Composio will redirect to your app after success via their default flow
+            this.logger.log(`SDK response: ${JSON.stringify(connectionRequest)}`);
 
-        const redirectUrl = connectUrl.toString();
-        this.logger.log(`Generated connect URL: ${redirectUrl}`);
+            const redirectUrl = connectionRequest?.redirectUrl ||
+                connectionRequest?.connectionStatus?.redirectUrl ||
+                '';
+            const connectionId = connectionRequest?.connectedAccountId ||
+                connectionRequest?.id ||
+                `conn_${Date.now()}`;
 
-        return {
-            redirectUrl,
-            connectionRequestId: connectionId,
-        };
+            return {
+                redirectUrl,
+                connectionRequestId: connectionId,
+            };
+        } catch (error: any) {
+            this.logger.error(`SDK error: ${error.message}`);
+            this.logger.error(`Full error: ${JSON.stringify(error)}`);
+            throw new Error(`Composio connection failed: ${error.message}`);
+        }
     }
 
     /**
