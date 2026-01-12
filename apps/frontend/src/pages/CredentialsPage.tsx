@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Key, Plus, CheckCircle, Loader2, ExternalLink } from 'lucide-react';
+import { Key, Plus, CheckCircle, Loader2 } from 'lucide-react';
 import { useState } from 'react';
 import { useAuthKit } from '@picahq/authkit';
 import api from '@/lib/api';
@@ -18,12 +18,12 @@ interface Connection {
 
 export default function CredentialsPage() {
     const queryClient = useQueryClient();
-    const [connecting, setConnecting] = useState<string | null>(null);
+    const [loading, setLoading] = useState(false);
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
-    // Pica AuthKit hook - correct implementation
-    const { open, isLoading } = useAuthKit({
+    // Pica AuthKit hook
+    const { open } = useAuthKit({
         token: {
             url: `${API_URL}/api/authkit/token`,
             headers: {
@@ -32,15 +32,15 @@ export default function CredentialsPage() {
         },
         onSuccess: (connection) => {
             console.log('✅ Connected:', connection);
-            setConnecting(null);
+            setLoading(false);
             queryClient.invalidateQueries({ queryKey: ['pica-connections'] });
         },
         onError: (error) => {
             console.error('❌ Connection error:', error);
-            setConnecting(null);
+            setLoading(false);
         },
         onClose: () => {
-            setConnecting(null);
+            setLoading(false);
         },
     });
 
@@ -66,8 +66,7 @@ export default function CredentialsPage() {
     const connections: Connection[] = connectionsData?.connections || [];
 
     const handleConnect = () => {
-        setConnecting('all');
-        // Open Pica AuthKit modal
+        setLoading(true);
         open();
     };
 
@@ -96,10 +95,10 @@ export default function CredentialsPage() {
                 {/* Main Connect Button */}
                 <button
                     onClick={handleConnect}
-                    disabled={isLoading}
+                    disabled={loading}
                     className="px-6 py-3 bg-primary-500 text-white rounded-lg font-medium hover:bg-primary-600 transition-all flex items-center gap-2"
                 >
-                    {isLoading ? (
+                    {loading ? (
                         <Loader2 className="w-5 h-5 animate-spin" />
                     ) : (
                         <Plus className="w-5 h-5" />
