@@ -1,0 +1,215 @@
+// Supabase PostgreSQL with pgvector extension
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  directUrl  = env("DIRECT_URL")
+  extensions = [vector]
+}
+
+// ==================== USERS & TENANCY ====================
+
+model User {
+  id              String   @id @default(uuid())
+  email           String   @unique
+  name            String?
+  avatarUrl       String?
+  plan            Plan     @default(FREE)
+  tokensUsed      Int      @default(0)
+  tokensLimit     Int      @default(10000)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  credentials     Credential[]
+  workflows       Workflow[]
+  executions      Execution[]
+  conversations   Conversation[]
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+// ==================== CREDENTIALS ====================
+
+model Credential {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  provider        String   // gmail, slack, google_drive, etc.
+  displayName     String   // "Personal Gmail", "Work Slack"
+  
+  // Encrypted OAuth tokens (AES-256)
+  accessTokenEnc  String
+  refreshTokenEnc String?
+  expiresAt       DateTime?
+  
+  metadata        Json?    // Provider-specific data
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, provider, displayName])
+  @@index([userId])
+}
+
+// ==================== WORKFLOWS ====================
+
+model Workflow {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  name            String
+  description     String?
+  prompt          String   // Original user prompt
+  
+  // n8n workflow data
+  n8nWorkflowId   String?  // ID in n8n instance
+  workflowJson    Json     // Complete n8n workflow JSON
+  
+  status          WorkflowStatus @default(DRAFT)
+  isActive        Boolean  @default(false)
+  
+  // Analytics
+  executionCount  Int      @default(0)
+  lastExecutedAt  DateTime?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  executions      Execution[]
+  nodesUsed       WorkflowNode[]
+
+  @@index([userId])
+}
+
+enum WorkflowStatus {
+  DRAFT
+  DEPLOYING
+  ACTIVE
+  PAUSED
+  ERROR
+}
+
+model WorkflowNode {
+  id              String   @id @default(uuid())
+  workflowId      String
+  workflow        Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  nodeType        String   // n8n.Gmail, n8n.Slack, etc.
+  nodeName        String   // Descriptive name
+  
+  @@index([workflowId])
+}
+
+// ==================== EXECUTIONS ====================
+
+model Execution {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workflowId      String
+  workflow        Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  
+  n8nExecutionId  String?  // ID in n8n
+  status          ExecutionStatus @default(PENDING)
+  
+  // Execution data
+  inputData       Json?
+  outputData      Json?
+  error           String?
+  
+  // Timing
+  startedAt       DateTime @default(now())
+  finishedAt      DateTime?
+  durationMs      Int?
+  
+  // Token usage
+  tokensUsed      Int      @default(0)
+
+  @@index([userId])
+  @@index([workflowId])
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  SUCCESS
+  FAILED
+  CANCELLED
+}
+
+// ==================== CONVERSATIONS ====================
+
+model Conversation {
+  id              String   @id @default(uuid())
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  title           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  messages        Message[]
+
+  @@index([userId])
+}
+
+model Message {
+  id              String   @id @default(uuid())
+  conversationId  String
+  conversation    Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  role            MessageRole
+  content         String
+  
+  // If this message resulted in a workflow
+  workflowId      String?
+  
+  metadata        Json?    // Tool calls, etc.
+  createdAt       DateTime @default(now())
+
+  @@index([conversationId])
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// ==================== N8N DOCUMENTATION ====================
+
+model N8nNode {
+  id              String   @id @default(uuid())
+  
+  // Node identification
+  nodeType        String   @unique // n8n-nodes-base.gmail
+  displayName     String            // Gmail
+  category        String            // Communication, Data, etc.
+  
+  // Documentation
+  description     String
+  documentation   String   @db.Text  // Full markdown docs
+  
+  // Schema
+  inputSchema     Json     // Expected inputs
+  outputSchema    Json     // Expected outputs
+  credentials     Json     // Required credentials
+  
+  // Vector embedding for semantic search
+  embedding       Unsupported("vector(1536)")?
+  
+  // Metadata
+  version         String
+  lastScraped     DateTime @default(now())
+
+  @@index([category])
+}
