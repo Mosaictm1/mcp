@@ -31,7 +31,7 @@ export class ComposioService implements OnModuleInit {
     }
 
     /**
-     * Initiate a connection using Connect Link (hosted OAuth)
+     * Initiate a connection using Composio's hosted Connect page
      */
     async initiateConnection(
         userId: string,
@@ -51,40 +51,21 @@ export class ComposioService implements OnModuleInit {
         this.logger.log(`Auth Config: ${authConfigId}, Toolkit: ${toolkitName}`);
         this.logger.log(`Callback URL: ${finalCallbackUrl}`);
 
-        try {
-            // Use v3 REST API directly (SDK uses deprecated v2)
-            const axios = require('axios');
-            const response = await axios.post(
-                'https://backend.composio.dev/api/v3/connected_accounts',
-                {
-                    auth_config: authConfigId,
-                    connection: {
-                        entity_id: userId,
-                        redirect_url: finalCallbackUrl,
-                    },
-                },
-                {
-                    headers: {
-                        'X-API-Key': apiKey,
-                        'Content-Type': 'application/json',
-                    },
-                }
-            );
+        // Generate unique connection ID
+        const connectionId = `conn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-            const data = response.data;
-            this.logger.log(`Composio v3 response: ${JSON.stringify(data)}`);
+        // Build Composio Connect URL directly (hosted auth page)
+        const connectUrl = new URL(`https://connect.composio.dev/${authConfigId}`);
+        connectUrl.searchParams.set('entityId', userId);
+        connectUrl.searchParams.set('redirectUrl', finalCallbackUrl);
 
-            return {
-                redirectUrl: data.redirect_url || data.redirectUrl || '',
-                connectionRequestId: data.id || data.connected_account_id || '',
-            };
-        } catch (error: any) {
-            const errorMessage = error.response?.data?.message || error.response?.data?.error || error.message;
-            const errorDetails = JSON.stringify(error.response?.data || {});
-            this.logger.error(`Composio v3 API error: ${errorMessage}`);
-            this.logger.error(`Error details: ${errorDetails}`);
-            throw new Error(`Composio connection failed: ${errorMessage}`);
-        }
+        const redirectUrl = connectUrl.toString();
+        this.logger.log(`Generated connect URL: ${redirectUrl}`);
+
+        return {
+            redirectUrl,
+            connectionRequestId: connectionId,
+        };
     }
 
     /**
