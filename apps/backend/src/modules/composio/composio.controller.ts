@@ -46,7 +46,11 @@ export class ComposioController {
         @Request() req: any,
         @Body() dto: InitiateConnectionDto,
     ) {
-        const userId = req.user.id;
+        const userId = req.user?.id || req.user?.sub;
+
+        if (!userId) {
+            throw new HttpException('User ID not found in request', HttpStatus.UNAUTHORIZED);
+        }
 
         try {
             const result = await this.composioService.initiateConnection(
@@ -55,8 +59,8 @@ export class ComposioController {
                 dto.callbackUrl,
             );
 
-            // Save pending connection to local DB
-            if (dto.toolkitName) {
+            // Save pending connection to local DB only if we have valid IDs
+            if (dto.toolkitName && result.connectionRequestId) {
                 await this.composioService.saveConnectionToDb(
                     userId,
                     result.connectionRequestId,
