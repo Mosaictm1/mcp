@@ -5,6 +5,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { UsersModule } from './modules/users/users.module';
 import { CredentialsModule } from './modules/credentials/credentials.module';
 import { ExecutionsModule } from './modules/executions/executions.module';
+import { ComposioModule } from './modules/composio/composio.module';
 import { McpModule } from './mcp/mcp.module';
 import { AiModule } from './ai/ai.module';
 import { HealthController } from './health.controller';
@@ -20,6 +21,7 @@ import { HealthController } from './health.controller';
         UsersModule,
         CredentialsModule,
         ExecutionsModule,
+        ComposioModule,
         McpModule,
         AiModule,
     ],

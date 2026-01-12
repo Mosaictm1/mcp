@@ -28,6 +28,7 @@ model User {
   workflows       Workflow[]
   executions      Execution[]
   conversations   Conversation[]
+  composioConnections ComposioConnection[]
 }
 
 enum Plan {
@@ -213,3 +214,24 @@ model N8nNode {
 
   @@index([category])
 }
+
+// ==================== COMPOSIO CONNECTIONS ====================
+
+model ComposioConnection {
+  id                String   @id @default(uuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  composioAccountId String   // Composio connected account ID
+  authConfigId      String   // Which auth config was used
+  toolkitName       String   // gmail, slack, notion, etc.
+  status            String   // ACTIVE, EXPIRED, FAILED, PENDING
+  
+  metadata          Json?    // Additional info from Composio
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  
+  @@unique([userId, composioAccountId])
+  @@index([userId])
+}
+
